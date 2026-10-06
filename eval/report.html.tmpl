@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}}</title>
+<style>
+:root{--bg:#fafaf8;--fg:#1d1d1b;--muted:#6b6b66;--line:#e3e2dc;--card:#fff;--pass:#1f7a4a;--pass-bg:#e5f3ea;--fail:#a3322b;--fail-bg:#f8e6e4;--accent:#3d4f3a}
+@media (prefers-color-scheme:dark){:root{--bg:#161615;--fg:#ecebe6;--muted:#a19f97;--line:#33322f;--card:#1f1f1d;--pass:#7fd19f;--pass-bg:#1d3326;--fail:#f19b93;--fail-bg:#3b2120;--accent:#b8c9b2}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:1100px;margin:0 auto;padding:24px 16px 64px}h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:28px 0 10px}
+.muted{color:var(--muted)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:10px 0}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{font-weight:600;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+tr:last-child td{border-bottom:0}a{color:var(--accent)}code,pre{font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
+pre{white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px;max-height:340px;overflow:auto}
+.badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600}.pass{color:var(--pass);background:var(--pass-bg)}.fail{color:var(--fail);background:var(--fail-bg)}
+.scroll{overflow-x:auto}form{display:flex;gap:8px;flex-wrap:wrap;align-items:center}select,button{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg)}
+details summary{cursor:pointer}.err{color:var(--fail)}
+</style>
+</head>
+<body><main>
+<h1>{{.Title}}</h1>
+<p class="muted">Deterministic scoring of stored model replies. Each run is a single sample of model behavior; scores measure citation, schema and text checks on these cases only.</p>
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+<h2>Runs</h2>
+<div class="scroll"><table>
+<tr><th>Run</th><th>Agent / model</th><th>Passed</th><th>Citations anchored</th><th>Mean latency</th><th>Integrity</th><th>Started</th></tr>
+{{range .Runs}}<tr>
+<td>{{if $.Served}}<a href="?run={{.File}}">{{.File}}</a>{{else}}{{.File}}{{end}}{{with .Run.Label}}<br><span class="muted">{{.}}</span>{{end}}</td>
+<td><code>{{.Run.Agent}}</code><br><span class="muted">{{.Run.Model}}</span></td>
+<td><span class="badge {{if eq .Run.Summary.Passed .Run.Summary.Total}}pass{{else}}fail{{end}}">{{.Run.Summary.Passed}}/{{.Run.Summary.Total}}</span></td>
+<td>{{.Run.Summary.CitationsAnchored}}/{{.Run.Summary.CitationsReturned}} ({{pct .Run.Summary.CitationsAnchored .Run.Summary.CitationsReturned}})</td>
+<td>{{.Run.Summary.MeanLatencyMS}} ms</td>
+<td>{{if eq .Verified "verified"}}<span class="badge pass">verified</span>{{else}}<span class="badge fail" title="{{.Verified}}">failed</span>{{end}}</td>
+<td>{{.Run.StartedAt}}</td></tr>{{else}}<tr><td colspan="7" class="muted">No run records found.</td></tr>{{end}}
+</table></div>
+
+{{if and .Served (gt (len .Runs) 1)}}<div class="card"><form method="get"><strong>Compare</strong>
+<select name="a" aria-label="Before run">{{range .Runs}}<option>{{.File}}</option>{{end}}</select> →
+<select name="b" aria-label="After run">{{range .Runs}}<option>{{.File}}</option>{{end}}</select>
+<button type="submit">Compare</button></form></div>{{end}}
+
+{{with .Compare}}<h2>Comparison</h2>
+<div class="card"><p><code>{{.BeforeAgent}}</code> → <code>{{.AfterAgent}}</code>: passed {{.BeforePassed}}/{{.Total}} → {{.AfterPassed}}/{{.Total}}; citations anchored {{printf "%.0f%%" (mul100 .BeforeAnchoredRatio)}} → {{printf "%.0f%%" (mul100 .AfterAnchoredRatio)}}</p><p class="muted">{{.Note}}</p></div>
+<div class="scroll"><table><tr><th>Case</th><th>Before</th><th>After</th><th>Change</th></tr>
+{{range .Cases}}<tr><td>{{.Title}}<br><code class="muted">{{.CaseID}}</code></td>
+<td><span class="badge {{if .Before}}pass{{else}}fail{{end}}">{{if .Before}}pass{{else}}fail{{end}}</span>{{with .BeforeWhy}}<br><span class="muted">{{.}}</span>{{end}}</td>
+<td><span class="badge {{if .After}}pass{{else}}fail{{end}}">{{if .After}}pass{{else}}fail{{end}}</span>{{with .AfterWhy}}<br><span class="muted">{{.}}</span>{{end}}</td>
+<td>{{.Change}}</td></tr>{{end}}</table></div>{{end}}
+
+{{with .Detail}}<h2>{{.File}}</h2>
+<div class="card"><p>Agent <code>{{.Run.Agent}}</code> · model {{.Run.Model}} · prompt <code>{{short .Run.PromptSHA256}}</code> · cases <code>{{short .Run.CasesSHA256}}</code> · {{.Run.EvaluatorVersion}} · digest <code>{{short .Run.Digest}}</code></p>
+{{if ne .Verified "verified"}}<p class="err">Integrity check failed: {{.Verified}}</p>{{end}}</div>
+{{range .Run.Results}}<div class="card"><p><span class="badge {{if .Pass}}pass{{else}}fail{{end}}">{{if .Pass}}pass{{else}}fail{{end}}</span> <strong>{{.Title}}</strong> <span class="muted">· {{.Kind}} · {{.LatencyMS}} ms · {{.Words}} words{{if .CitationsReturned}} · citations anchored {{.CitationsAnchored}}/{{.CitationsReturned}}{{end}}</span></p>
+{{range .Failures}}<p class="err">{{.}}</p>{{end}}
+<details><summary>Reply</summary><pre>{{.Reply}}</pre></details>
+{{if .Draft}}<details><summary>Anchored draft scored by the validator</summary><pre>{{.Draft}}</pre></details>{{end}}
+<details><summary>Message sent</summary><pre>{{.Message}}</pre></details></div>{{end}}{{end}}
+</main></body></html>

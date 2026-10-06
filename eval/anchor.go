@@ -1,6 +1,7 @@
 package eval
 
 import (
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -19,10 +20,27 @@ type Citation struct {
 // too easily to show that the model read the evidence.
 const MinQuoteRunes = 5
 
+// GatewayDateStamp matches the annotation LibraOS's inbound DateNormalizer
+// guardrail appends to relative date phrases in every user message, including
+// quoted evidence: "today" becomes "today (2026-10-06)". A model that quotes
+// the rewritten evidence faithfully would otherwise fail exact anchoring.
+var GatewayDateStamp = regexp.MustCompile(`(?i)\b(the day before yesterday|day after tomorrow|tomorrow|yesterday|today) \(\d{4}-\d{2}-\d{2}\)`)
+
 // Anchor finds a model quote in the named unit, then in any unit of the same
 // source. Matching tolerates whitespace runs and typographic quote or dash
-// differences only. The returned QuotedText is always the exact source span.
+// differences only. If that fails, gateway date stamps are removed and the
+// match is retried. The returned QuotedText is always the exact source span.
 func Anchor(evidence []Evidence, sourceID, unitID, quote string) (Citation, bool) {
+	if c, ok := anchorExact(evidence, sourceID, unitID, quote); ok {
+		return c, true
+	}
+	if stripped := GatewayDateStamp.ReplaceAllString(quote, "$1"); stripped != quote {
+		return anchorExact(evidence, sourceID, unitID, stripped)
+	}
+	return Citation{}, false
+}
+
+func anchorExact(evidence []Evidence, sourceID, unitID, quote string) (Citation, bool) {
 	quote = strings.TrimSpace(quote)
 	if len([]rune(quote)) < MinQuoteRunes {
 		return Citation{}, false

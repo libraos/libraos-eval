@@ -61,8 +61,13 @@ func TestAnchorReturnsExactSourceSpans(t *testing.T) {
 	if _, ok = Anchor(evidence, "deck", "p1", "20%"); ok {
 		t.Fatal("quotes under MinQuoteRunes must not anchor")
 	}
-	if _, ok = Anchor(evidence, "deck", "p1", "Pre-revenue today (2026-10-06)."); ok {
-		t.Fatal("an inserted date is a changed quotation")
+	if c, ok = Anchor(evidence, "deck", "p1", "Pre-revenue today (2026-10-06)."); !ok || c.QuotedText != "Pre-revenue today." {
+		t.Fatalf("the gateway's date stamp must be removed before anchoring: %+v", c)
+	}
+	for _, invented := range []string{"Pre-revenue on 2026-10-06.", "Pre-revenue today (Q3 2026).", "Pre-revenue 2026-10-06 today."} {
+		if _, ok = Anchor(evidence, "deck", "p1", invented); ok {
+			t.Fatalf("only the exact gateway stamp may be removed: %q", invented)
+		}
 	}
 	if _, ok = Anchor(evidence, "other", "p1", "收入增长🙂20%"); ok {
 		t.Fatal("quotes never anchor across sources")
@@ -102,7 +107,7 @@ func TestScoreReply(t *testing.T) {
 	if !s.Pass || s.CitationsAnchored != 1 || strings.Contains(s.Draft, "priority") {
 		t.Fatalf("grounded draft: %+v", s)
 	}
-	s = ScoreReply(draftCase, strings.Replace(reply, "Pre-revenue today.", "Pre-revenue today (2026-10-06).", 1))
+	s = ScoreReply(draftCase, strings.Replace(reply, "Pre-revenue today.", "Pre-revenue today, as of 2026.", 1))
 	if s.Pass || !strings.HasPrefix(s.Failures[0], "invalid_citation") {
 		t.Fatalf("an edited quotation must fail: %+v", s)
 	}

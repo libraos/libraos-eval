@@ -39,6 +39,10 @@ Changing scoring behavior requires a new `EvaluatorVersion`. Old runs then fail 
 
 The anchoring and draft-validation rules come from the Investment OS Employee Lab, where a live-model mode evaluates employee candidates inside a Deal-scoped review and publication workflow. `libraos-eval` is the workflow-free core: files in, files out, and any LibraOS gateway.
 
+## Known gateway behavior
+
+LibraOS's default inbound `DateNormalizer` guardrail appends ` (YYYY-MM-DD)` to "today", "yesterday", "tomorrow" and similar phrases in every user message, including quoted evidence. A model that quotes the evidence it received therefore reproduces text that is not in the source. `Anchor` first tries the quote as written; if that fails, it removes only that exact stamp after those exact phrases and retries. The stored quotation is always the source span, so no invented text can be accepted. Without this, every case whose evidence contains "today" failed regardless of the prompt.
+
 ## Not in 0.1
 
 - Model-graded or rubric scoring. Every check is deterministic.
